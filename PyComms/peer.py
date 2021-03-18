@@ -48,7 +48,7 @@ class Peer:
                 if thisPeer is not None:
                     # get the hops from the returned peer to the desired peer
                     yield from thisPeer.getPathToPeer(peerID, exclude)
-                    # yield self.getID()
+                    yield self.getID()
 
     def getHopsForPeerByID(
         self,
@@ -78,23 +78,16 @@ class Peer:
 if __name__ == "__main__":
     peersTable = dict[ID, "Peer"]()
 
-    peer0 = Peer(peersTable, 0)
-    peer1 = Peer(peersTable, 1)
+    peersList = list[Peer]()
+    for i in range(0, 10):
+        peersList.append(Peer(peersTable, i))
 
-    peer2 = Peer(peersTable, 2)
-    peer3 = Peer(peersTable, 3)
+    for i in range(0, 9):
+        peersList[i].addNeighbour(i + 1)
+        peersList[i + 1].addNeighbour(i)
 
-    peer0.addNeighbour(peer1.getID())
-    peer1.addNeighbour(peer0.getID())
-
-    peer1.addNeighbour(peer2.getID())
-    peer2.addNeighbour(peer1.getID())
-
-    peer2.addNeighbour(peer3.getID())
-    peer3.addNeighbour(peer2.getID())
-
-    for peer in [peer0, peer1, peer2, peer3]:
-        for destination in [peer0, peer1, peer2, peer3]:
+    for peer in peersList:
+        for destination in peersList:
             print(
                 f"Hops from {peer.getID()} to {destination.getID()}: {peer.getHopsForPeerByID(destination.getID())}"
             )
