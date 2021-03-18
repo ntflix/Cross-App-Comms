@@ -1,5 +1,4 @@
-# from PyComms.router import Router
-from typing import Optional
+from typing import Any, Iterator, Optional
 
 
 ID = int
@@ -16,60 +15,94 @@ class Peer:
         self.__peers = dict[ID, int]()
         # add an entry in the routing table for itself of hops amount 0
         self.__peers[self.__id] = 0
-
         peersTable[self.__id] = self
-        # self.__router.addPeer(self)
 
     def addNeighbour(self, peerID: ID) -> None:
         self.__peers[peerID] = 1
 
-    def getHopsForPeerByID(self, peerID: ID, exclude: set[ID]) -> Optional[int]:
+    def getPathToPeer(
+        self,
+        peerID: ID,
+        exclude: Optional[set[ID]] = None,
+    ) -> Iterator[ID]:
+        if exclude is None:
+            exclude = set()
         exclude.add(self.__id)
+
         try:
-            # check whether it's in this peer's neighbours list
-            return self.__peers[peerID]
+            if self.__peers[peerID]:
+                # the peer is next to this one
+                # send the desired peer's ID back
+                yield peerID
+                # send this peer's ID back
+                yield self.__id
         except:
             # iterate through all the peers EXCEPT SELF
             for thisPeerID in set(self.__peers.keys()) - exclude:
-                # get the peer object from the router
-                # thisPeer = self.__router.getPeerByID(thisPeerID)
                 thisPeer: Optional[Peer] = None
                 try:
                     thisPeer = self.__peersTable[thisPeerID]
                 except:
                     thisPeer = None
-                # check it was returned as a real peer, and not None
+                # check that the returned peer was not None
                 if thisPeer is not None:
                     # get the hops from the returned peer to the desired peer
-                    thisHops = thisPeer.getHopsForPeerByID(peerID, exclude)
-                    if thisHops is not None:
-                        # add 1 because we've gone through a neighbour
-                        return thisHops + 1
-            #  wasn't found, return None
-            return None
+                    yield from thisPeer.getPathToPeer(peerID, exclude)
+                    # yield self.getID()
+
+    def getHopsForPeerByID(
+        self,
+        peerID: ID,
+    ) -> Optional[int]:
+        path = set(self.getPathToPeer(peerID))
+        return len(path) - 1
 
     def getID(self) -> ID:
         return self.__id
 
+    def __onReceiveMessage(self, message: Any) -> None:
+        print(message)
 
-peersTable = dict[ID, "Peer"]()
+    def sendMessageToPeer(self, peer: ID, message: Any) -> None:
+        if peer == self.getID():
+            self.__onReceiveMessage(message)
+        else:
+            path = list(self.getPathToPeer(peer))
+            if peer in path:
+                # the path is valid
+                # get the next peer by taking the penultimate Peer from the list of path peers
+                nextPeer = path[0]
+                self.__peersTable[nextPeer].sendMessageToPeer(peer, message)
 
-peer0 = Peer(peersTable, 0)
-peer1 = Peer(peersTable, 1)
 
-peer2 = Peer(peersTable, 2)
-peer3 = Peer(peersTable, 3)
+if __name__ == "__main__":
+    peersTable = dict[ID, "Peer"]()
 
-peer0.addNeighbour(peer1.getID())
-peer1.addNeighbour(peer0.getID())
+    peer0 = Peer(peersTable, 0)
+    peer1 = Peer(peersTable, 1)
 
-peer1.addNeighbour(peer2.getID())
-peer2.addNeighbour(peer1.getID())
+    peer2 = Peer(peersTable, 2)
+    peer3 = Peer(peersTable, 3)
 
-peer2.addNeighbour(peer3.getID())
-peer3.addNeighbour(peer2.getID())
+    peer0.addNeighbour(peer1.getID())
+    peer1.addNeighbour(peer0.getID())
 
-print(peer0.getHopsForPeerByID(peer3.getID(), set()))
-print(peer3.getHopsForPeerByID(peer0.getID(), set()))
-print(peer3.getHopsForPeerByID(peer1.getID(), set()))
-print(peer1.getHopsForPeerByID(peer3.getID(), set()))
+    peer1.addNeighbour(peer2.getID())
+    peer2.addNeighbour(peer1.getID())
+
+    peer2.addNeighbour(peer3.getID())
+    peer3.addNeighbour(peer2.getID())
+
+    for peer in [peer0, peer1, peer2, peer3]:
+        for destination in [peer0, peer1, peer2, peer3]:
+            print(
+                f"Hops from {peer.getID()} to {destination.getID()}: {peer.getHopsForPeerByID(destination.getID())}"
+            )
+            path = list(peer.getPathToPeer(destination.getID()))
+            path.reverse()
+            print(f"Path: {' -> '.join(map(str, path))}")
+            peer.sendMessageToPeer(
+                destination.getID(),
+                f"Hello from {peer.getID()} to {destination.getID()}!",
+            )
+            print()
